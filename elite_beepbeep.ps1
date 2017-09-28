@@ -1,4 +1,4 @@
-$scriptVersion = "20170925_163220"
+$scriptVersion = "20170927_174728"
 
 #version 2 - no more netlog needed (thanks 2.3)
 #- no more manual correlation of ip addresses to cmdrs as FD directly supplies that information via commander history tab,
@@ -17,7 +17,7 @@ $cooldown = 7
 
 #how often to check the cmdrHistory file (in seconds), file watcher eventing seems to be squicky and inconsistent
 #may benefit from a higher value since cmdrHistory isn't as immediately-responsive as netlog
-$frequency = 1
+$pollInterval = 1
 
 #these should never change, but just in case, it's in the config section
 $folder = (Get-ChildItem Env:LOCALAPPDATA).Value + '\Frontier Developments\Elite Dangerous\CommanderHistory'
@@ -25,56 +25,98 @@ $filter = '*.cmdrHistory'
 
 ########## CONFIGURATION ##########
 
+########## FUNCTIONS ##########
+
 #returns int for unix timestamp
 Function Get-UnixTime() {
     Return [int][double]::Parse((Get-Date -UFormat %s))
 }
 
+#returns Interactions array from cmdrHistory file
+Function Get-CmdrHistory() {
+    Return (Get-Content (Join-Path -Path $folder -ChildPath (Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) | ConvertFrom-Json).'Interactions'
+}
+
 #two audible beep alert
-Function Output-AlertBeep($last) {
+Function Out-AlertBeep($last) {
     #enforced minimum cooldown between beeps
-    $now = Get-UnixTime
+    $now = (Get-UnixTime)
+    $type = 'double'
+    
     If (($sound -eq $true) -and (($now - $last) -gt $cooldown)) {
         $last = $now
-        [Console]::Beep(2000,200)
-        [Console]::Beep(2000,200)
+        
+        If ($type -eq 'double') {
+            #double C7 beeps
+            [Console]::Beep(2093.004522,200)
+            [Console]::Beep(2093.004522,200)
+        } ElseIf ($type -eq 'ascend') {
+            #ascending A6-E7 beeps
+            [Console]::Beep(1760.000000,200)
+            [Console]::Beep(2637.020455,200)
+        } ElseIf ($type -eq 'descend') {
+            #descending E7-A6 beeps
+            [Console]::Beep(2637.020455,200)
+            [Console]::Beep(1760.000000,200)
+        }
     }
     Return $last
 }
 
-$file = Join-Path -Path $folder -ChildPath (Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name
+########## FUNCTIONS ##########
 
-#exit instructions
-Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
-
-#register filesystem watcher
-$watcher = New-Object IO.FileSystemWatcher $folder, $filter -Property @{IncludeSubdirectories = $false; NotifyFilter = [IO.NotifyFilters]'FileName, LastWrite'}
+########## INIT ##########
 
 #WHY THE FUCK DOES FRONTIER USE THE WIN32 GREGORIAN EPOCH OF 1601-JAN-01 WHAT THE ACTUAL FLYING FUCK ON ROLLERBLADES
 $origin = Get-Date -Year 1601 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0 -Millisecond 0
 
 #make sure beeps aren't too spammy
-$lastbeep = Get-UnixTime
+$lastBeep = (Get-UnixTime)
 
 #init last seen epoch time
-$lastepoch = ((Get-Content $file | ConvertFrom-Json).'Interactions')[0].Epoch
+$lastEpoch = (Get-CmdrHistory)[0].Epoch
 
-While($true) {
+#arraylist to hold people in current instance so _leaving_ the instance doesn't pop a beepbeep
+$instance = New-Object System.Collections.ArrayList
+
+########## INIT ##########
+
+#exit instructions
+Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
+
+#slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
+While ($true) {
     #scoop up history file as JSON, extract top-level Interactions array
-    $history = (Get-Content $file | ConvertFrom-Json).'Interactions'
+    $history = (Get-CmdrHistory)
     
-    #we're interested primarily in Name and Epoch elements newer than $lastbeep
+    #parse through cmdrHistory for new entries
     $history | ForEach-Object {
-        $date = Get-Date -Date $origin.AddSeconds($_.'Epoch') -UFormat %T
+        $epoch = $_.'Epoch'
         $name = $_.'Name'
-        If($_.'Epoch' -gt $lastepoch) {
-            $lastepoch = $_.'Epoch'
-            Write-Host "[$($date)] CONTACT: $($name)"
+        
+        #only emit a beep and a text line for new entries
+        If ($epoch -gt $lastEpoch) {
+            $lastEpoch = $epoch
+            $date = Get-Date -Date $origin.AddSeconds($epoch) -UFormat %T
+            $direction = @()
             
-            #beepbeep
-            $lastbeep = Output-AlertBeep($lastbeep)
+            #if cmdr exists in the instance already, this beep is actually outbound rather than inbound
+            If ($instance.BinarySearch($name) -lt 0) {
+                $null = $instance.Add($name)
+                $direction = @('Red', '  --->')
+                
+                #threshold-gated beep because this is an _incoming_ contact
+                $lastBeep = Out-AlertBeep($lastBeep)
+            } Else {
+                While ($instance.BinarySearch($name) -ge 0) { $instance.Remove($name) }
+                $direction = @('Green', '<---  ')
+                
+                #no beep for outbound
+            }
+            
+            Write-Host -ForegroundColor $direction[0] ("[{0}] {1} {2}" -f $date, $direction[1], $name)
         }
     }
     
-    Start-Sleep -s $frequency
+    Start-Sleep -s $pollInterval
 }
