@@ -13,8 +13,6 @@ $scriptVersion = "20170927_174728"
 
 ########## CONFIGURATION ##########
 
-#Custom Sound toggle
-
 #sound alert configuration -- set $sound = $false to disable, $cooldown for lowest duration (seconds) between beeps
 $sound = $true
 $cooldown = 7
