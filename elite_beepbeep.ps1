@@ -1,5 +1,7 @@
 $scriptVersion = "20170927_174728"
 
+#version 2.5 - adding custom sound and Text To Speech support
+
 #version 2 - no more netlog needed (thanks 2.3)
 #- no more manual correlation of ip addresses to cmdrs as FD directly supplies that information via commander history tab,
 #  stored as cleartext unobfuscated JSON in your user profile directory
@@ -14,6 +16,15 @@ $scriptVersion = "20170927_174728"
 #sound alert configuration -- set $sound = $false to disable, $cooldown for lowest duration (seconds) between beeps
 $sound = $true
 $cooldown = 7
+
+#TextToSpeech toggle
+$readNames=$false
+
+#Custom "beep" sound toggle
+$customSound=$false
+
+#custom "beep" sound path
+$customSoundPath="C:\WINDOWS\Media\notify.wav"
 
 #how often to check the cmdrHistory file (in seconds), file watcher eventing seems to be squicky and inconsistent
 #may benefit from a higher value since cmdrHistory isn't as immediately-responsive as netlog
@@ -38,7 +49,7 @@ Function Get-CmdrHistory() {
 }
 
 #two audible beep alert
-Function Out-AlertBeep($last) {
+Function Out-AlertBeep($last, $newNameInput) {
     #enforced minimum cooldown between beeps
     $now = (Get-UnixTime)
     $type = 'double'
@@ -47,9 +58,19 @@ Function Out-AlertBeep($last) {
         $last = $now
         
         If ($type -eq 'double') {
-            #double C7 beeps
-            [Console]::Beep(2093.004522,200)
-            [Console]::Beep(2093.004522,200)
+            If($readNames -eq $false) {
+                If($customSound -eq $false) {
+                    #double C7 beeps
+                    [Console]::Beep(2093.004522,200)
+                    [Console]::Beep(2093.004522,200) 
+                } Else {
+                    (New-Object Media.SoundPlayer $customSoundPath).Play();
+                }
+            } Else {
+                #Read Commander Name
+                $speak = New-Object System.Speech.Synthesis.SpeechSynthesizer
+                $speak.Speak($newNameInput)
+            }
         } ElseIf ($type -eq 'ascend') {
             #ascending A6-E7 beeps
             [Console]::Beep(1760.000000,200)
@@ -85,6 +106,8 @@ $instance = New-Object System.Collections.ArrayList
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
 
 #slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
+
+Add-Type -AssemblyName System.speech
 While ($true) {
     #scoop up history file as JSON, extract top-level Interactions array
     $history = (Get-CmdrHistory)
@@ -106,7 +129,7 @@ While ($true) {
                 $direction = @('Red', '  --->')
                 
                 #threshold-gated beep because this is an _incoming_ contact
-                $lastBeep = Out-AlertBeep($lastBeep)
+                $lastBeep = Out-AlertBeep $lastBeep $name
             } Else {
                 While ($instance.BinarySearch($name) -ge 0) { $instance.Remove($name) }
                 $direction = @('Green', '<---  ')
