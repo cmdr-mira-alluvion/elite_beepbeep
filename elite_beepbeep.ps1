@@ -1,4 +1,4 @@
-$scriptVersion = "20170927_174728"
+$scriptVersion = "20171001_032908"
 
 #version 2.5 - adding custom sound and Text To Speech support
 
@@ -18,13 +18,13 @@ $sound = $true
 $cooldown = 7
 
 #TextToSpeech toggle
-$readNames=$false
+$readNames = $false
 
 #Custom "beep" sound toggle
-$customSound=$false
+$customSound = $false
 
 #custom "beep" sound path
-$customSoundPath="C:\WINDOWS\Media\notify.wav"
+$customSoundPath = (Get-ChildItem Env:WINDIR).Value + '\Media\notify.wav'
 
 #how often to check the cmdrHistory file (in seconds), file watcher eventing seems to be squicky and inconsistent
 #may benefit from a higher value since cmdrHistory isn't as immediately-responsive as netlog
@@ -58,8 +58,10 @@ Function Out-AlertBeep($last, $newNameInput) {
         $last = $now
         
         If ($type -eq 'double') {
-            If($readNames -eq $false) {
-                If($customSound -eq $false) {
+            #TODO: Move readnames into $type, fully change to param, pass 'read' in mainloop bead on $readNames value
+            If ($readNames -eq $false) {
+                #TODO: Add file existence check here for custom sound
+                If ($customSound -eq $false) {
                     #double C7 beeps
                     [Console]::Beep(2093.004522,200)
                     [Console]::Beep(2093.004522,200) 
@@ -100,14 +102,15 @@ $lastEpoch = (Get-CmdrHistory)[0].Epoch
 #arraylist to hold people in current instance so _leaving_ the instance doesn't pop a beepbeep
 $instance = New-Object System.Collections.ArrayList
 
+#initialize speech synthesizer
+Add-Type -AssemblyName System.Speech
+
 ########## INIT ##########
 
 #exit instructions
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
 
 #slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
-
-Add-Type -AssemblyName System.speech
 While ($true) {
     #scoop up history file as JSON, extract top-level Interactions array
     $history = (Get-CmdrHistory)
