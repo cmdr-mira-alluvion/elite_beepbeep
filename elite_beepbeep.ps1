@@ -21,10 +21,10 @@ $cooldown = 7
 $readNames = $false
 
 #Custom "beep" sound toggle
-$customSound = $false
+$customSound = $true
 
 #custom "beep" sound path
-$customSoundPath = (Get-ChildItem Env:WINDIR).Value + '\Media\notify.wav'
+$customSoundPath = '.\seatbelt.wav'
 
 #how often to check the cmdrHistory file (in seconds), file watcher eventing seems to be squicky and inconsistent
 #may benefit from a higher value since cmdrHistory isn't as immediately-responsive as netlog
