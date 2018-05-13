@@ -33,6 +33,7 @@ $pollInterval = 1
 #these should never change, but just in case, it's in the config section
 $folder = (Get-ChildItem Env:LOCALAPPDATA).Value + '\Frontier Developments\Elite Dangerous\CommanderHistory'
 $filter = '*.cmdrHistory'
+#TODO: extract and emit current CMDR ID
 
 ########## CONFIGURATION ##########
 
@@ -110,6 +111,8 @@ Add-Type -AssemblyName System.Speech
 #exit instructions
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
 
+#TODO: maybe repurpose old beepbeep v1.0 self-updating code to point at some JSON source of CommanderID->Name
+
 #slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
 While ($true) {
     #scoop up history file as JSON, extract top-level Interactions array
@@ -118,7 +121,9 @@ While ($true) {
     #parse through cmdrHistory for new entries
     $history | ForEach-Object {
         $epoch = $_.'Epoch'
-        $name = $_.'Name'
+        #TODO: temporarily just emitting numerics, should clean up references to name and change to cmdrID
+        #$name = $_.'Name'
+        $name = $_.'CommanderID'
         
         #only emit a beep and a text line for new entries
         If ($epoch -gt $lastEpoch) {
