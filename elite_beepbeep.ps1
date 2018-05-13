@@ -1,4 +1,4 @@
-$scriptVersion = "20171001_032908"
+$scriptVersion = "20180513_153620"
 
 #version 2.5 - adding custom sound and Text To Speech support
 
