@@ -1,4 +1,4 @@
-$scriptVersion = "20180518_204132"
+$scriptVersion = "20180518_204442"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -148,7 +148,8 @@ If ($definitions -ne '') {
 
 #spit out current user's id number
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
-Write-Host -ForegroundColor Green "Currently logged in cmdrID: $currentID"
+$currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID }
+Write-Host -ForegroundColor Green "MY ID: $currentName"
 
 #exit instructions
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
