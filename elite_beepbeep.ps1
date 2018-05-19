@@ -1,4 +1,4 @@
-$scriptVersion = "20180518_185110"
+$scriptVersion = "20180518_201514"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -128,10 +128,10 @@ If ($definitions -ne '') {
         $count = ($cmdrs | Get-Member).count - 2
         
         #emit info to console
-        Write-Host -ForegroundColor Green "Loaded $count IP->CMDR definitions -- last updated $($cmdrs.__LastUpdated)"
+        Write-Host -ForegroundColor Green "Loaded $count ID->CMDR definitions -- last updated $($cmdrs.__LastUpdated)"
     } Catch {
         #something went wrong -- exit and try again later
-        Write-Host -ForegroundColor Red "Could not fetch load IP->CMDR definitions. Please try again later."
+        Write-Host -ForegroundColor Red "Could not fetch load ID->CMDR definitions. Please try again later."
         #Write-Host -ForegroundColor Red "Press any key to exit..."
         #$null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         #Break
@@ -146,6 +146,10 @@ If ($definitions -ne '') {
 #    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 #}
 
+#spit out current user's id number
+$currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
+Write-Host -ForegroundColor Green "Currently logged in cmdrID: $currentID"
+
 #exit instructions
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
 
@@ -157,8 +161,6 @@ While ($true) {
     #parse through cmdrHistory for new entries
     $history | ForEach-Object {
         $epoch = $_.'Epoch'
-        #TODO: temporarily just emitting numerics, should clean up references to name and change to cmdrID
-        #$name = $_.'Name'
         $id = $_.'CommanderID'
         $name = If ($cmdrs.$id) { $cmdrs.$id } Else { $id }
         
