@@ -1,7 +1,11 @@
-$scriptVersion = "20180513_153620"
+$scriptVersion = "20180518_185110"
 
-#version 2.5 - adding custom sound and Text To Speech support
-
+#version 2.6
+#- added cmdrID->name translation
+#
+#version 2.5
+#- adding custom sound and Text To Speech support
+#
 #version 2 - no more netlog needed (thanks 2.3)
 #- no more manual correlation of ip addresses to cmdrs as FD directly supplies that information via commander history tab,
 #  stored as cleartext unobfuscated JSON in your user profile directory
@@ -33,7 +37,11 @@ $pollInterval = 1
 #these should never change, but just in case, it's in the config section
 $folder = (Get-ChildItem Env:LOCALAPPDATA).Value + '\Frontier Developments\Elite Dangerous\CommanderHistory'
 $filter = '*.cmdrHistory'
+#TODO: handle potential multi-user scenarios here
 #TODO: extract and emit current CMDR ID
+
+#url to fetch cmdr ID -> name from
+$definitions = ''
 
 ########## CONFIGURATION ##########
 
@@ -108,10 +116,38 @@ Add-Type -AssemblyName System.Speech
 
 ########## INIT ##########
 
+#fetch definitions from internet if configured
+#TODO: make it more failure-tolerant in preparation for open-sourcing
+$cmdrs = $null
+If ($definitions -ne '') {
+    Try {
+        #grab latest defs from this url and convert into psobject from json
+        $cmdrs = Invoke-WebRequest -Uri $definitions -ErrorAction Stop | ConvertFrom-Json
+        
+        #grab number of knowns minus metadata/placeholder
+        $count = ($cmdrs | Get-Member).count - 2
+        
+        #emit info to console
+        Write-Host -ForegroundColor Green "Loaded $count IP->CMDR definitions -- last updated $($cmdrs.__LastUpdated)"
+    } Catch {
+        #something went wrong -- exit and try again later
+        Write-Host -ForegroundColor Red "Could not fetch load IP->CMDR definitions. Please try again later."
+        #Write-Host -ForegroundColor Red "Press any key to exit..."
+        #$null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        #Break
+        $cmdrs = $null
+    }
+}
+
+##check script version and emit update message if needed, currently pausing is sufficient, no need to exit
+#If ($scriptVersion -lt $cmdrs.'0') {
+#    Write-Host -ForegroundColor Yellow "`nNEW SCRIPT VERSION AVAILABLE`n`nPlease go to https://github.com/cmdr-mira-alluvion/elite_beepbeep to update`n`nCurrent version: $($scriptVersion)`nUpdated version: $($cmdrs.0)`n"
+#    Write-Host -ForegroundColor Yellow "Press any key to continue..."
+#    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+#}
+
 #exit instructions
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
-
-#TODO: maybe repurpose old beepbeep v1.0 self-updating code to point at some JSON source of CommanderID->Name
 
 #slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
 While ($true) {
@@ -123,7 +159,8 @@ While ($true) {
         $epoch = $_.'Epoch'
         #TODO: temporarily just emitting numerics, should clean up references to name and change to cmdrID
         #$name = $_.'Name'
-        $name = $_.'CommanderID'
+        $id = $_.'CommanderID'
+        $name = If ($cmdrs.$id) { $cmdrs.$id } Else { $id }
         
         #only emit a beep and a text line for new entries
         If ($epoch -gt $lastEpoch) {
