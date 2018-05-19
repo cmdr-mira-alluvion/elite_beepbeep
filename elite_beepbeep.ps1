@@ -1,4 +1,4 @@
-$scriptVersion = "20180518_203219"
+$scriptVersion = "20180518_204132"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -125,7 +125,7 @@ If ($definitions -ne '') {
         $cmdrs = Invoke-WebRequest -Uri $definitions -ErrorAction Stop | ConvertFrom-Json
         
         #grab number of knowns minus metadata/placeholder
-        $count = ($cmdrs | Get-Member).count - 2
+        $count = ($cmdrs | Get-Member -MemberType NoteProperty).count - 2
         
         #emit info to console
         Write-Host -ForegroundColor Green "Loaded $count ID->CMDR definitions -- last updated $($cmdrs.__LastUpdated)"
