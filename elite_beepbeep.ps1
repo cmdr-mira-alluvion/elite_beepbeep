@@ -1,4 +1,4 @@
-$scriptVersion = "20180518_201514"
+$scriptVersion = "20180518_203219"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -171,14 +171,14 @@ While ($true) {
             $direction = @()
             
             #if cmdr exists in the instance already, this beep is actually outbound rather than inbound
-            If ($instance.BinarySearch($name) -lt 0) {
-                $null = $instance.Add($name)
+            If ($instance.BinarySearch($id) -lt 0) {
+                $null = $instance.Add($id)
                 $direction = @('Red', '  --->')
                 
                 #threshold-gated beep because this is an _incoming_ contact
                 $lastBeep = Out-AlertBeep $lastBeep $name
             } Else {
-                While ($instance.BinarySearch($name) -ge 0) { $instance.Remove($name) }
+                While ($instance.BinarySearch($id) -ge 0) { $instance.Remove($id) }
                 $direction = @('Green', '<---  ')
                 
                 #no beep for outbound
