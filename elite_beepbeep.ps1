@@ -1,4 +1,4 @@
-$scriptVersion = "20180518_204442"
+$scriptVersion = "20180519_015717"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -34,6 +34,9 @@ $customSoundPath = '.\seatbelt.wav'
 #may benefit from a higher value since cmdrHistory isn't as immediately-responsive as netlog
 $pollInterval = 1
 
+#how often to re-fetch defs
+$updateInterval = 300
+
 #these should never change, but just in case, it's in the config section
 $folder = (Get-ChildItem Env:LOCALAPPDATA).Value + '\Frontier Developments\Elite Dangerous\CommanderHistory'
 $filter = '*.cmdrHistory'
@@ -55,6 +58,37 @@ Function Get-UnixTime() {
 #returns Interactions array from cmdrHistory file
 Function Get-CmdrHistory() {
     Return (Get-Content (Join-Path -Path $folder -ChildPath (Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) | ConvertFrom-Json).'Interactions'
+}
+
+#grab ID->name defs from URI defined above
+Function Get-IDToNames {
+    #fetch definitions from internet if configured
+    #TODO: make it more failure-tolerant in preparation for open-sourcing
+    $cmdrs = $null
+    If ($definitions -ne '') {
+        Try {
+            #grab latest defs from this url and convert into psobject from json
+            $cmdrs = Invoke-WebRequest -Uri $definitions -ErrorAction Stop | ConvertFrom-Json
+            
+            #exit if it's the same version
+            If ($lastDefs -eq $cmdrs.__LastUpdated) { return $null }
+            $lastDefs = $cmdrs.__LastUpdated
+            
+            #grab number of knowns minus metadata/placeholder
+            $count = ($cmdrs | Get-Member -MemberType NoteProperty).count - 2
+            
+            #emit info to console
+            Write-Host -ForegroundColor Green "Loaded $count ID->CMDR definitions -- last updated $lastDefs"
+        } Catch {
+            #something went wrong -- exit and try again later
+            Write-Host -ForegroundColor Red "Could not fetch load ID->CMDR definitions. Please try again later."
+            #Write-Host -ForegroundColor Red "Press any key to exit..."
+            #$null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+            #Break
+            $cmdrs = $null
+        }
+    }
+    return $cmdrs
 }
 
 #two audible beep alert
@@ -108,6 +142,12 @@ $lastBeep = (Get-UnixTime)
 #init last seen epoch time
 $lastEpoch = (Get-CmdrHistory)[0].Epoch
 
+#offset in update window to actually fetch
+$updateOffset = Get-Random -Maximum $updateInterval
+
+#last fetched defs version
+$lastDefs = 0
+
 #arraylist to hold people in current instance so _leaving_ the instance doesn't pop a beepbeep
 $instance = New-Object System.Collections.ArrayList
 
@@ -116,35 +156,12 @@ Add-Type -AssemblyName System.Speech
 
 ########## INIT ##########
 
-#fetch definitions from internet if configured
-#TODO: make it more failure-tolerant in preparation for open-sourcing
-$cmdrs = $null
-If ($definitions -ne '') {
-    Try {
-        #grab latest defs from this url and convert into psobject from json
-        $cmdrs = Invoke-WebRequest -Uri $definitions -ErrorAction Stop | ConvertFrom-Json
-        
-        #grab number of knowns minus metadata/placeholder
-        $count = ($cmdrs | Get-Member -MemberType NoteProperty).count - 2
-        
-        #emit info to console
-        Write-Host -ForegroundColor Green "Loaded $count ID->CMDR definitions -- last updated $($cmdrs.__LastUpdated)"
-    } Catch {
-        #something went wrong -- exit and try again later
-        Write-Host -ForegroundColor Red "Could not fetch load ID->CMDR definitions. Please try again later."
-        #Write-Host -ForegroundColor Red "Press any key to exit..."
-        #$null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        #Break
-        $cmdrs = $null
-    }
-}
+#clear window
+Get-Variable true | Out-Default
+Clear-Host
 
-##check script version and emit update message if needed, currently pausing is sufficient, no need to exit
-#If ($scriptVersion -lt $cmdrs.'0') {
-#    Write-Host -ForegroundColor Yellow "`nNEW SCRIPT VERSION AVAILABLE`n`nPlease go to https://github.com/cmdr-mira-alluvion/elite_beepbeep to update`n`nCurrent version: $($scriptVersion)`nUpdated version: $($cmdrs.0)`n"
-#    Write-Host -ForegroundColor Yellow "Press any key to continue..."
-#    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-#}
+#initial defs fetch
+$cmdrs = Get-IDToNames
 
 #spit out current user's id number
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
@@ -189,5 +206,9 @@ While ($true) {
         }
     }
     
+    If (((Get-UnixTime) % $updateInterval) -eq $updateOffset) {
+        $cmdrs2 = Get-IDToNames
+        If ($cmdrs2) { $cmdrs = $cmdrs }
+    }
     Start-Sleep -s $pollInterval
 }
