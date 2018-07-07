@@ -1,4 +1,4 @@
-$scriptVersion = "20180519_015717"
+$scriptVersion = "20180706_184659"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -34,8 +34,11 @@ $customSoundPath = '.\seatbelt.wav'
 #may benefit from a higher value since cmdrHistory isn't as immediately-responsive as netlog
 $pollInterval = 1
 
-#how often to re-fetch defs
-$updateInterval = 300
+#whether to run once and bail or keep polling
+$pollForever = $true
+
+#how often to re-fetch defs (in seconds)
+$updateInterval = 60
 
 #these should never change, but just in case, it's in the config section
 $folder = (Get-ChildItem Env:LOCALAPPDATA).Value + '\Frontier Developments\Elite Dangerous\CommanderHistory'
@@ -68,27 +71,31 @@ Function Get-IDToNames {
     If ($definitions -ne '') {
         Try {
             #grab latest defs from this url and convert into psobject from json
-            $cmdrs = Invoke-WebRequest -Uri $definitions -ErrorAction Stop | ConvertFrom-Json
+            $progressPreference = 'silentlyContinue'
+            $cmdrs = Invoke-WebRequest -Uri $definitions -Method Get -UseBasicParsing -ErrorAction Stop | ConvertFrom-Json
             
             #exit if it's the same version
-            If ($lastDefs -eq $cmdrs.__LastUpdated) { return $null }
+            If ($lastDefs -eq $cmdrs.__LastUpdated) {
+                Return $null
+                Break
+            }
             $lastDefs = $cmdrs.__LastUpdated
             
             #grab number of knowns minus metadata/placeholder
             $count = ($cmdrs | Get-Member -MemberType NoteProperty).count - 2
             
             #emit info to console
-            Write-Host -ForegroundColor Green "Loaded $count ID->CMDR definitions -- last updated $lastDefs"
+            #Write-Host -ForegroundColor Green "Loaded $count ID->CMDR definitions -- last updated $lastDefs"
         } Catch {
             #something went wrong -- exit and try again later
             Write-Host -ForegroundColor Red "Could not fetch load ID->CMDR definitions. Please try again later."
             #Write-Host -ForegroundColor Red "Press any key to exit..."
             #$null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            #Break
+            Break
             $cmdrs = $null
         }
     }
-    return $cmdrs
+    Return $cmdrs
 }
 
 #two audible beep alert
@@ -138,6 +145,7 @@ $origin = Get-Date -Year 1601 -Month 1 -Day 1 -Hour 0 -Minute 0 -Second 0 -Milli
 
 #make sure beeps aren't too spammy
 $lastBeep = (Get-UnixTime)
+$firstRun = $true
 
 #init last seen epoch time
 $lastEpoch = (Get-CmdrHistory)[0].Epoch
@@ -163,28 +171,25 @@ Clear-Host
 #initial defs fetch
 $cmdrs = Get-IDToNames
 
-#spit out current user's id number
+#spit out current user's name entry if found, ID number otherwise
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
 $currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID }
-Write-Host -ForegroundColor Green "MY ID: $currentName"
+Write-Host -ForegroundColor Green "ID: $currentName`n"
 
 #exit instructions
-Write-Host -ForegroundColor Red "Press Ctrl+C to exit..."
+Write-Host -ForegroundColor Red "Press Ctrl+C to exit...`n"
 
 #slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
-While ($true) {
-    #scoop up history file as JSON, extract top-level Interactions array
-    $history = (Get-CmdrHistory)
-    
-    #parse through cmdrHistory for new entries
-    $history | ForEach-Object {
+While ($pollForever) {
+    #scoop up history file as JSON, extract top-level Interactions array, parse through cmdrHistory for new entries
+    Get-CmdrHistory | ForEach-Object {
         $epoch = $_.'Epoch'
         $id = $_.'CommanderID'
         $name = If ($cmdrs.$id) { $cmdrs.$id } Else { $id }
         
         #only emit a beep and a text line for new entries
         If ($epoch -gt $lastEpoch) {
-            $lastEpoch = $epoch
+            If ($firstRun -eq $false) { $lastEpoch = $epoch }
             $date = Get-Date -Date $origin.AddSeconds($epoch) -UFormat %T
             $direction = @()
             
@@ -204,11 +209,12 @@ While ($true) {
             
             Write-Host -ForegroundColor $direction[0] ("[{0}] {1} {2}" -f $date, $direction[1], $name)
         }
+        $firstRun = $false
     }
     
     If (((Get-UnixTime) % $updateInterval) -eq $updateOffset) {
         $cmdrs2 = Get-IDToNames
-        If ($cmdrs2) { $cmdrs = $cmdrs }
+        If ($cmdrs2) { $cmdrs = $cmdrs2 }
     }
     Start-Sleep -s $pollInterval
 }
