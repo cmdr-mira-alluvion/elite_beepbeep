@@ -1,4 +1,4 @@
-$scriptVersion = "20180706_184659"
+$scriptVersion = "20180712_224253"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -61,6 +61,18 @@ Function Get-UnixTime() {
 #returns Interactions array from cmdrHistory file
 Function Get-CmdrHistory() {
     Return (Get-Content (Join-Path -Path $folder -ChildPath (Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) | ConvertFrom-Json).'Interactions'
+}
+
+#returns cmdr ID from journal log if they aren't in the defs
+Function Get-JournalName() {
+    $journaldir = (Get-ChildItem Env:USERPROFILE).Value + '\Saved Games\Frontier Developments\Elite Dangerous'
+    $lastlog = Get-Content (Join-Path -Path $journaldir -ChildPath (Get-ChildItem -Path $journaldir -Filter 'Journal.*.log' | Select -Last 1).name) | ConvertFrom-Json
+    foreach ($event in $lastlog) {
+        if ($event.event -eq "Commander") {
+            Return $event.name
+            Break
+        }
+    }
 }
 
 #grab ID->name defs from URI defined above
@@ -173,7 +185,7 @@ $cmdrs = Get-IDToNames
 
 #spit out current user's name entry if found, ID number otherwise
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
-$currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID }
+$currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID + " '" + (Get-JournalName) + "'" ; If ($definitions -ne '') { $definitions += '?s=' + [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($currentName)) } }
 Write-Host -ForegroundColor Green "ID: $currentName`n"
 
 #exit instructions
