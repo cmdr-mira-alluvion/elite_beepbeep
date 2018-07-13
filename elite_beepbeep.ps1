@@ -47,7 +47,7 @@ $filter = '*.cmdrHistory'
 #TODO: extract and emit current CMDR ID
 
 #url to fetch cmdr ID -> name from
-$definitions = ''
+$definitions = 'https://kncg.pw/hg4f3QL.txt'
 
 ########## CONFIGURATION ##########
 
