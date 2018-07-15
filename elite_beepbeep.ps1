@@ -1,4 +1,4 @@
-$scriptVersion = "20180712_224253"
+$scriptVersion = "20180714_204903"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -185,7 +185,8 @@ $cmdrs = Get-IDToNames
 
 #spit out current user's name entry if found, ID number otherwise
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
-$currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID + " '" + (Get-JournalName) + "'" ; If ($definitions -ne '') { $definitions += '?s=' + [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($currentName)) } }
+$currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID + " '" + (Get-JournalName) + "'" }
+If ($definitions -ne '') { $definitions += '?s=' + [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($currentName)) }
 Write-Host -ForegroundColor Green "ID: $currentName`n"
 
 #exit instructions
