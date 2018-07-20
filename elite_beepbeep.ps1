@@ -1,4 +1,4 @@
-$scriptVersion = "20180714_204903"
+$scriptVersion = "20180719_233535"
 
 #version 2.6
 #- added cmdrID->name translation
@@ -25,7 +25,7 @@ $cooldown = 7
 $readNames = $false
 
 #Custom "beep" sound toggle
-$customSound = $true
+$customSound = $false
 
 #custom "beep" sound path
 $customSoundPath = '.\seatbelt.wav'
@@ -46,6 +46,9 @@ $filter = '*.cmdrHistory'
 #TODO: handle potential multi-user scenarios here
 #TODO: extract and emit current CMDR ID
 
+#whether or not to log to file into journal log directory
+$logToFile = $true
+
 #url to fetch cmdr ID -> name from
 $definitions = 'https://kncg.pw/hg4f3QL.txt'
 
@@ -60,7 +63,11 @@ Function Get-UnixTime() {
 
 #returns Interactions array from cmdrHistory file
 Function Get-CmdrHistory() {
-    Return (Get-Content (Join-Path -Path $folder -ChildPath (Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) | ConvertFrom-Json).'Interactions'
+    Try {
+        Return (Get-Content (Join-Path -Path $folder -ChildPath (Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) | ConvertFrom-Json).'Interactions'
+    } Catch {
+        Return $null
+    }
 }
 
 #returns cmdr ID from journal log if they aren't in the defs
@@ -179,6 +186,13 @@ Add-Type -AssemblyName System.Speech
 #clear window
 Get-Variable true | Out-Default
 Clear-Host
+
+#set up logfile if needed
+If ($logToFile) {
+    #NOT WORKING PROPERLY YET
+    $logPath = (Get-ChildItem Env:USERPROFILE).Value + '\Saved Games\Frontier Developments\Elite Dangerous\Beepbeep.' + (Get-UnixTime) + '.log'
+    #Start-Transcript -Path $logPath -Append | Out-Null
+}
 
 #initial defs fetch
 $cmdrs = Get-IDToNames
