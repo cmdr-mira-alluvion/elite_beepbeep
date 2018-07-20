@@ -1,15 +1,4 @@
-$scriptVersion = "20180719_233535"
-
-#version 2.6
-#- added cmdrID->name translation
-#
-#version 2.5
-#- adding custom sound and Text To Speech support
-#
-#version 2 - no more netlog needed (thanks 2.3)
-#- no more manual correlation of ip addresses to cmdrs as FD directly supplies that information via commander history tab,
-#  stored as cleartext unobfuscated JSON in your user profile directory
-#  basically serves as a detached contact history window for a second monitor that also beepbeeps
+$scriptVersion = "20180720_025745"
 
 #Seeing a warning message that says "Security Warning Run only scripts that you trust."?
 #Try this to fix it:
@@ -44,7 +33,6 @@ $updateInterval = 60
 $folder = (Get-ChildItem Env:LOCALAPPDATA).Value + '\Frontier Developments\Elite Dangerous\CommanderHistory'
 $filter = '*.cmdrHistory'
 #TODO: handle potential multi-user scenarios here
-#TODO: extract and emit current CMDR ID
 
 #whether or not to log to file into journal log directory
 $logToFile = $true
@@ -85,7 +73,6 @@ Function Get-JournalName() {
 #grab ID->name defs from URI defined above
 Function Get-IDToNames {
     #fetch definitions from internet if configured
-    #TODO: make it more failure-tolerant in preparation for open-sourcing
     $cmdrs = $null
     If ($definitions -ne '') {
         Try {
@@ -108,8 +95,6 @@ Function Get-IDToNames {
         } Catch {
             #something went wrong -- exit and try again later
             Write-Host -ForegroundColor Red "Could not fetch load ID->CMDR definitions. Please try again later."
-            #Write-Host -ForegroundColor Red "Press any key to exit..."
-            #$null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
             Break
             $cmdrs = $null
         }
@@ -187,12 +172,9 @@ Add-Type -AssemblyName System.Speech
 Get-Variable true | Out-Default
 Clear-Host
 
-#set up logfile if needed
-If ($logToFile) {
-    #NOT WORKING PROPERLY YET
-    $logPath = (Get-ChildItem Env:USERPROFILE).Value + '\Saved Games\Frontier Developments\Elite Dangerous\Beepbeep.' + (Get-UnixTime) + '.log'
-    #Start-Transcript -Path $logPath -Append | Out-Null
-}
+#logfile init
+$logFile = (Get-ChildItem Env:USERPROFILE).Value + '\Saved Games\Frontier Developments\Elite Dangerous\Beepbeep.' + (Get-UnixTime) + '.log'
+$logBuffer = ''
 
 #initial defs fetch
 $cmdrs = Get-IDToNames
@@ -201,13 +183,20 @@ $cmdrs = Get-IDToNames
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
 $currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID + " '" + (Get-JournalName) + "'" }
 If ($definitions -ne '') { $definitions += '?s=' + [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($currentName)) }
-Write-Host -ForegroundColor Green "ID: $currentName`n"
+"ID: $currentName`n" | Tee-Object -Variable logBuffer | Write-Host -ForegroundColor Green
 
 #exit instructions
 Write-Host -ForegroundColor Red "Press Ctrl+C to exit...`n"
 
 #slurp up cmdrHistory file every polling interval, see which entries are new and spit them out
 While ($pollForever) {
+    #flush log buffer if it's enabled
+    if (($logFile) -and ($logBuffer -ne '')) {
+        Write-Host 'flushing logbuffer'
+        Out-File -InputObject $logBuffer -FilePath $logFile -Encoding UTF8 -Append
+        $logBuffer = ''
+    }
+    
     #scoop up history file as JSON, extract top-level Interactions array, parse through cmdrHistory for new entries
     Get-CmdrHistory | ForEach-Object {
         $epoch = $_.'Epoch'
@@ -234,14 +223,18 @@ While ($pollForever) {
                 #no beep for outbound
             }
             
-            Write-Host -ForegroundColor $direction[0] ("[{0}] {1} {2}" -f $date, $direction[1], $name)
+            ("[{0}] {1} {2}" -f $date, $direction[1], $name) | Tee-Object -Variable lineBuffer | Write-Host -ForegroundColor $direction[0]
+            $logBuffer += $lineBuffer + '`n'
         }
         $firstRun = $false
     }
     
+    #update cmdr defs if the timer says we need to
     If (((Get-UnixTime) % $updateInterval) -eq $updateOffset) {
         $cmdrs2 = Get-IDToNames
         If ($cmdrs2) { $cmdrs = $cmdrs2 }
     }
+    
+    #sleep before grabbing cmdrHistory file again
     Start-Sleep -s $pollInterval
 }
