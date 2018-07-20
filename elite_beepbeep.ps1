@@ -192,7 +192,6 @@ Write-Host -ForegroundColor Red "Press Ctrl+C to exit...`n"
 While ($pollForever) {
     #flush log buffer if it's enabled
     if (($logFile) -and ($logBuffer -ne '')) {
-        Write-Host 'flushing logbuffer'
         Out-File -InputObject $logBuffer -FilePath $logFile -Encoding UTF8 -Append
         $logBuffer = ''
     }
