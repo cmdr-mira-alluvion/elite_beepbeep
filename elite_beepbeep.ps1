@@ -1,4 +1,4 @@
-$scriptVersion = "20180720_195050"
+$scriptVersion = "20180727_171800"
 
 #Seeing a warning message that says "Security Warning Run only scripts that you trust."?
 #Try this to fix it:
@@ -61,13 +61,20 @@ Function Get-CmdrHistory() {
 #returns cmdr ID from journal log if they aren't in the defs
 Function Get-JournalName() {
     $journaldir = (Get-ChildItem Env:USERPROFILE).Value + "\Saved Games\Frontier Developments\Elite Dangerous"
-    $lastlog = Get-Content (Join-Path -Path $journaldir -ChildPath (Get-ChildItem -Path $journaldir -Filter "Journal.*.log" | Select -Last 1).name) | ConvertFrom-Json
-    foreach ($event in $lastlog) {
-        if ($event.event -eq "Commander") {
-            Return $event.name
-            Break
+    #try to fetch name from journal for 5 seconds before returning a default value
+    $i = 0
+    Do {
+        $lastlog = Get-Content (Join-Path -Path $journaldir -ChildPath (Get-ChildItem -Path $journaldir -Filter "Journal.*.log" | Select -Last 1).name) | ConvertFrom-Json
+        foreach ($event in $lastlog) {
+            if ($event.event -eq "Commander") {
+                Return $event.name
+                Break
+            }
         }
-    }
+        Start-Sleep -s 1
+        $i++
+    } While ($i -lt 5)
+    Return "#unknown"
 }
 
 #grab ID->name defs from URI defined above
@@ -184,7 +191,7 @@ $cmdrs = Get-IDToNames
 
 #spit out current user's name entry if found, ID number otherwise
 $currentID = ((Get-ChildItem -Path $folder -Filter $filter | Select -Last 1).Name) -Replace "Commander(\d+)\.cmdrHistory", '$1'
-$currentName = If ($cmdrs.$currentID) { $cmdrs.$currentID } Else { $currentID + " '" + (Get-JournalName) + "'" }
+$currentName = $currentID + " '" + (Get-JournalName) + "'"
 If ($definitions -ne "") { $definitions += "?s=" + [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($currentName)) }
 "ID: $currentName`n" | Tee-Object -Variable logBuffer | Write-Host -ForegroundColor Green
 
