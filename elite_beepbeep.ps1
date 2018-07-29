@@ -1,4 +1,4 @@
-$scriptVersion = "20180727_171800"
+$scriptVersion = "20180728_203218"
 
 #Seeing a warning message that says "Security Warning Run only scripts that you trust."?
 #Try this to fix it:
@@ -88,11 +88,26 @@ Function Get-IDToNames {
             $cmdrs = Invoke-WebRequest -Uri $definitions -Method Get -UseBasicParsing -ErrorAction Stop | ConvertFrom-Json
             
             #exit if it's the same version
-            If ($lastDefs -eq $cmdrs.__LastUpdated) {
+            If ($lastDefs -eq $cmdrs.'__LastUpdated') {
                 Return $null
                 Break
             }
-            $lastDefs = $cmdrs.__LastUpdated
+            $lastDefs = $cmdrs.'__LastUpdated'
+            
+            #nag user if update available according to datasource
+            If ($scriptVersion -lt $cmdrs.'__ScriptVersion') {
+                " _   _           _       _`n" +
+                "| | | |_ __   __| | __ _| |_ ___`n" +
+                "| | | | '_ \ / _`` |/ _`` | __/ _ \`n" +
+                "| |_| | |_) | (_| | (_| | ||  __/`n" +
+                " \___/| .__/ \__,_|\__,_|\__\___|`n" +
+                "    _ |_|         _ _       _     _`n" +
+                "   / \__   ____ _(_) | __ _| |__ | | ___`n" +
+                "  / _ \ \ / / _`` | | |/ _`` | '_ \| |/ _ \`n" +
+                " / ___ \ V / (_| | | | (_| | |_) | |  __/`n" +
+                "/_/   \_\_/ \__,_|_|_|\__,_|_.__/|_|\___|`n`n" +
+                "https://github.com/cmdr-mira-alluvion/elite_beepbeep`n" | Write-Host -ForegroundColor Yellow
+            }
             
             #grab number of knowns minus metadata/placeholder
             $count = ($cmdrs | Get-Member -MemberType NoteProperty).count - 2
